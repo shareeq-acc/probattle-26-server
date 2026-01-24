@@ -1,11 +1,15 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, ManyToOne } from "typeorm";
 import { Service } from "./Service";
 import { Booking } from "./Booking";
+import { City } from "./City";
+import { RefreshToken } from "./RefreshToken";
 
 export enum UserRole {
-  PROVIDER = 'provider',
-  SEEKER = 'seeker',
-  BOTH = 'both'
+  SEEKER = 'seeker',       // Default user role
+  PROVIDER = 'provider',   // Service provider
+  BOTH = 'both',          // Both seeker and provider
+  MODERATOR = 'moderator', // Can review content
+  ADMIN = 'admin'         // Full system access
 }
 
 @Entity()
@@ -35,6 +39,24 @@ export class User {
   })
   role: UserRole;
 
+  @Column({ nullable: true })
+  cityId: string;
+
+  @ManyToOne(() => City, city => city.users, { nullable: true })
+  city: City;
+
+  @Column('decimal', { precision: 10, scale: 7, nullable: true })
+  latitude: number;
+
+  @Column('decimal', { precision: 10, scale: 7, nullable: true })
+  longitude: number;
+
+  @Column({ nullable: true, type: 'varchar' })
+  avatar: string | null;
+
+  @Column({ default: false })
+  verified: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 
@@ -49,4 +71,7 @@ export class User {
 
   @OneToMany(() => Booking, booking => booking.provider)
   bookingsAsProvider: Booking[];
+
+  @OneToMany(() => RefreshToken, token => token.user)
+  refreshTokens: RefreshToken[];
 }

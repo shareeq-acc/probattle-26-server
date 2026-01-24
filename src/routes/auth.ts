@@ -1,16 +1,18 @@
 import { Router, Request, Response } from "express";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import { AppDataSource } from "../data-source";
 import { User } from "../entities/User";
+import { generateTokenPair, verifyRefreshToken, findValidRefreshToken, revokeRefreshToken } from "../utils/jwt";
+import { calculateH3Index } from "../utils/spatial";
+import { authLimiter } from "../middleware/rateLimiter";
 
 const router = Router();
 const userRepository = AppDataSource.getRepository(User);
 
 // POST /api/auth/register
-router.post("/register", async (req: Request, res: Response) => {
+router.post("/register", authLimiter, async (req: Request, res: Response) => {
   try {
-    const { email, password, name, phone, role, bio } = req.body;
+    const { email, password, name, phone, role, bio, cityId, latitude, longitude } = req.body;
 
     if (!email || !password || !name) {
       return res.status(400).json({ error: "Email, password, and name are required" });
@@ -33,20 +35,24 @@ router.post("/register", async (req: Request, res: Response) => {
       name,
       phone,
       role,
-      bio
+      bio,
+      cityId,
+      latitude,
+      longitude
     });
 
     await userRepository.save(user);
 
-    const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET!,
-      { expiresIn: "7d" }
-    );
+    // Generate token pair
+    const { accessToken, refreshToken } = await generateTokenPair(user);
 
     const { password: _, ...userWithoutPassword } = user;
 
-    res.status(201).json({ user: userWithoutPassword, token });
+    res.status(201).json({ 
+      user: userWithoutPassword, 
+      accessToken, 
+      refreshToken 
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Server error" });
@@ -54,7 +60,7 @@ router.post("/register", async (req: Request, res: Response) => {
 });
 
 // POST /api/auth/login
-router.post("/login", async (req: Request, res: Response) => {
+router.post("/login", authLimiter, async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
@@ -62,7 +68,11 @@ router.post("/login", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const user = await userRepository.findOne({ where: { email } });
+    const user = await userRepository.findOne({ 
+      where: { email },
+      relations: ['city']
+    });
+    
     if (!user) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
@@ -72,15 +82,72 @@ router.post("/login", async (req: Request, res: Response) => {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET!,
-      { expiresIn: "7d" }
-    );
+    // Generate token pair
+    const { accessToken, refreshToken } = await generateTokenPair(user);
 
     const { password: _, ...userWithoutPassword } = user;
 
-    res.json({ user: userWithoutPassword, token });
+    res.json({ 
+      user: userWithoutPassword, 
+      accessToken, 
+      refreshToken 
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// POST /api/auth/refresh
+router.post("/refresh", async (req: Request, res: Response) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({ error: "Refresh token required" });
+    }
+
+    // Verify token signature
+    const payload = verifyRefreshToken(refreshToken);
+
+    // Check if token exists in database and is valid
+    const storedToken = await findValidRefreshToken(refreshToken);
+    if (!storedToken) {
+      return res.status(403).json({ error: "Invalid or expired refresh token" });
+    }
+
+    // Check if token is expired
+    if (storedToken.expiresAt < new Date()) {
+      await revokeRefreshToken(refreshToken);
+      return res.status(403).json({ error: "Refresh token expired" });
+    }
+
+    // Generate new token pair
+    const { accessToken: newAccessToken, refreshToken: newRefreshToken } = await generateTokenPair(storedToken.user);
+
+    // Revoke old refresh token
+    await revokeRefreshToken(refreshToken);
+
+    res.json({ 
+      accessToken: newAccessToken, 
+      refreshToken: newRefreshToken 
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(403).json({ error: "Invalid refresh token" });
+  }
+});
+
+// POST /api/auth/logout
+router.post("/logout", async (req: Request, res: Response) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (refreshToken) {
+      await revokeRefreshToken(refreshToken);
+    }
+
+    res.json({ message: "Logged out successfully" });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Server error" });

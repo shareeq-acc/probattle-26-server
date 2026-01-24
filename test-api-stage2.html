@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neighbourly API Stage 2 - Test Interface</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+        .button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+        .button:hover { background: #0056b3; }
+        .response { background: #f8f9fa; padding: 15px; border-radius: 4px; margin: 10px 0; white-space: pre-wrap; font-family: monospace; }
+        .input { width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; }
+        .file-input { margin: 10px 0; }
+        .error { color: #dc3545; }
+        .success { color: #28a745; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    </style>
+</head>
+<body>
+    <h1>🌟 Neighbourly API Stage 2 - Test Interface</h1>
+    <p>Test the enhanced API with multi-city support, geospatial search, and image uploads.</p>
+
+    <div class="grid">
+        <!-- Authentication Section -->
+        <div class="section">
+            <h2>🔐 Authentication</h2>
+            <div>
+                <h3>Register</h3>
+                <input type="email" id="regEmail" class="input" placeholder="Email" value="test@example.com">
+                <input type="password" id="regPassword" class="input" placeholder="Password" value="password123">
+                <input type="text" id="regName" class="input" placeholder="Name" value="Test User">
+                <input type="text" id="regPhone" class="input" placeholder="Phone" value="+1234567890">
+                <select id="regRole" class="input">
+                    <option value="seeker">Seeker</option>
+                    <option value="provider">Provider</option>
+                    <option value="both">Both</option>
+                </select>
+                <button class="button" onclick="register()">Register</button>
+            </div>
+            
+            <div>
+                <h3>Login</h3>
+                <input type="email" id="loginEmail" class="input" placeholder="Email" value="admin@neighbourly.com">
+                <input type="password" id="loginPassword" class="input" placeholder="Password" value="admin123">
+                <button class="button" onclick="login()">Login</button>
+            </div>
+
+            <div>
+                <h3>Current Token</h3>
+                <div id="currentToken" class="response">No token</div>
+                <button class="button" onclick="refreshToken()">Refresh Token</button>
+                <button class="button" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <!-- Cities Section -->
+        <div class="section">
+            <h2>🏙️ Cities</h2>
+            <button class="button" onclick="getCities()">Get All Cities</button>
+            <div id="citiesResponse" class="response"></div>
+        </div>
+
+        <!-- Services Section -->
+        <div class="section">
+            <h2>🛠️ Services</h2>
+            <div>
+                <h3>Search Services</h3>
+                <input type="number" id="searchLat" class="input" placeholder="Latitude" value="40.7128">
+                <input type="number" id="searchLng" class="input" placeholder="Longitude" value="-74.0060">
+                <input type="number" id="searchRadius" class="input" placeholder="Radius (km)" value="10">
+                <select id="searchCategory" class="input">
+                    <option value="">All Categories</option>
+                    <option value="tutoring">Tutoring</option>
+                    <option value="repair">Repair</option>
+                    <option value="cleaning">Cleaning</option>
+                    <option value="gardening">Gardening</option>
+                </select>
+                <button class="button" onclick="searchServices()">Search Services</button>
+            </div>
+
+            <div>
+                <h3>Create Service (Provider Required)</h3>
+                <input type="text" id="serviceTitle" class="input" placeholder="Title" value="Test Service">
+                <textarea id="serviceDesc" class="input" placeholder="Description">Test service description</textarea>
+                <select id="serviceCategory" class="input">
+                    <option value="tutoring">Tutoring</option>
+                    <option value="repair">Repair</option>
+                    <option value="cleaning">Cleaning</option>
+                </select>
+                <input type="number" id="servicePrice" class="input" placeholder="Price" value="25">
+                <select id="servicePriceType" class="input">
+                    <option value="hourly">Hourly</option>
+                    <option value="fixed">Fixed</option>
+                    <option value="daily">Daily</option>
+                </select>
+                <input type="text" id="serviceLocation" class="input" placeholder="Location" value="New York, NY">
+                <input type="number" id="serviceLat" class="input" placeholder="Latitude" value="40.7589">
+                <input type="number" id="serviceLng" class="input" placeholder="Longitude" value="-73.9851">
+                <input type="file" id="serviceImages" class="file-input" multiple accept="image/*">
+                <button class="button" onclick="createService()">Create Service</button>
+            </div>
+
+            <div>
+                <h3>My Services (Provider Required)</h3>
+                <select id="myServicesStatus" class="input">
+                    <option value="">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                </select>
+                <button class="button" onclick="getMyServices()">Get My Services</button>
+            </div>
+
+            <div id="servicesResponse" class="response"></div>
+        </div>
+
+        <!-- User Profile Section -->
+        <div class="section">
+            <h2>👤 User Profile</h2>
+            <button class="button" onclick="getProfile()">Get My Profile</button>
+            
+            <div>
+                <h3>Upload Avatar</h3>
+                <input type="file" id="avatarFile" class="file-input" accept="image/*">
+                <button class="button" onclick="uploadAvatar()">Upload Avatar</button>
+            </div>
+
+            <div id="profileResponse" class="response"></div>
+        </div>
+
+        <!-- Admin Section -->
+        <div class="section">
+            <h2>⚙️ Admin (Admin Required)</h2>
+            <button class="button" onclick="getAnalytics()">Get Analytics</button>
+            <button class="button" onclick="getUsers()">Get All Users</button>
+            <div id="adminResponse" class="response"></div>
+        </div>
+
+        <!-- Moderation Section -->
+        <div class="section">
+            <h2>🛡️ Moderation (Moderator Required)</h2>
+            <button class="button" onclick="getPendingServices()">Get Pending Services</button>
+            <div id="moderationResponse" class="response"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+        let accessToken = localStorage.getItem('accessToken');
+        let refreshTokenValue = localStorage.getItem('refreshToken');
+
+        // Update token display
+        function updateTokenDisplay() {
+            document.getElementById('currentToken').textContent = accessToken ? 
+                `Access: ${accessToken.substring(0, 50)}...` : 'No token';
+        }
+        updateTokenDisplay();
+
+        // API call helper
+        async function apiCall(endpoint, options = {}) {
+            const url = `${API_BASE}${endpoint}`;
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+
+            if (accessToken && !options.noAuth) {
+                headers.Authorization = `Bearer ${accessToken}`;
+            }
+
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    headers
+                });
+
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || `HTTP ${response.status}`);
+                }
+
+                return data;
+            } catch (error) {
+                throw error;
+            }
+        }
+
+        // Authentication functions
+        async function register() {
+            try {
+                const data = await apiCall('/auth/register', {
+                    method: 'POST',
+                    noAuth: true,
+                    body: JSON.stringify({
+                        email: document.getElementById('regEmail').value,
+                        password: document.getElementById('regPassword').value,
+                        name: document.getElementById('regName').value,
+                        phone: document.getElementById('regPhone').value,
+                        role: document.getElementById('regRole').value
+                    })
+                });
+
+                accessToken = data.accessToken;
+                refreshTokenValue = data.refreshToken;
+                localStorage.setItem('accessToken', accessToken);
+                localStorage.setItem('refreshToken', refreshTokenValue);
+                updateTokenDisplay();
+
+                document.getElementById('currentToken').innerHTML = 
+                    `<span class="success">✅ Registered successfully!</span><br>${JSON.stringify(data.user, null, 2)}`;
+            } catch (error) {
+                document.getElementById('currentToken').innerHTML = 
+                    `<span class="error">❌ Registration failed: ${error.message}</span>`;
+            }
+        }
+
+        async function login() {
+            try {
+                const data = await apiCall('/auth/login', {
+                    method: 'POST',
+                    noAuth: true,
+                    body: JSON.stringify({
+                        email: document.getElementById('loginEmail').value,
+                        password: document.getElementById('loginPassword').value
+                    })
+                });
+
+                accessToken = data.accessToken;
+                refreshTokenValue = data.refreshToken;
+                localStorage.setItem('accessToken', accessToken);
+                localStorage.setItem('refreshToken', refreshTokenValue);
+                updateTokenDisplay();
+
+                document.getElementById('currentToken').innerHTML = 
+                    `<span class="success">✅ Login successful!</span><br>${JSON.stringify(data.user, null, 2)}`;
+            } catch (error) {
+                document.getElementById('currentToken').innerHTML = 
+                    `<span class="error">❌ Login failed: ${error.message}</span>`;
+            }
+        }
+
+        async function refreshToken() {
+            try {
+                const data = await apiCall('/auth/refresh', {
+                    method: 'POST',
+                    noAuth: true,
+                    body: JSON.stringify({
+                        refreshToken: refreshTokenValue
+                    })
+                });
+
+                accessToken = data.accessToken;
+                refreshTokenValue = data.refreshToken;
+                localStorage.setItem('accessToken', accessToken);
+                localStorage.setItem('refreshToken', refreshTokenValue);
+                updateTokenDisplay();
+
+                document.getElementById('currentToken').innerHTML = 
+                    `<span class="success">✅ Token refreshed!</span>`;
+            } catch (error) {
+                document.getElementById('currentToken').innerHTML = 
+                    `<span class="error">❌ Refresh failed: ${error.message}</span>`;
+            }
+        }
+
+        async function logout() {
+            try {
+                await apiCall('/auth/logout', {
+                    method: 'POST',
+                    noAuth: true,
+                    body: JSON.stringify({
+                        refreshToken: refreshTokenValue
+                    })
+                });
+
+                accessToken = null;
+                refreshTokenValue = null;
+                localStorage.removeItem('accessToken');
+                localStorage.removeItem('refreshToken');
+                updateTokenDisplay();
+
+                document.getElementById('currentToken').innerHTML = 
+                    `<span class="success">✅ Logged out successfully!</span>`;
+            } catch (error) {
+                document.getElementById('currentToken').innerHTML = 
+                    `<span class="error">❌ Logout failed: ${error.message}</span>`;
+            }
+        }
+
+        // Cities functions
+        async function getCities() {
+            try {
+                const data = await apiCall('/cities', { noAuth: true });
+                document.getElementById('citiesResponse').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('citiesResponse').innerHTML = 
+                    `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        // Services functions
+        async function searchServices() {
+            try {
+                const lat = document.getElementById('searchLat').value;
+                const lng = document.getElementById('searchLng').value;
+                const radius = document.getElementById('searchRadius').value;
+                const category = document.getElementById('searchCategory').value;
+
+                let query = `/services?lat=${lat}&lng=${lng}&radius=${radius}`;
+                if (category) query += `&category=${category}`;
+
+                const data = await apiCall(query, { noAuth: true });
+                document.getElementById('servicesResponse').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('servicesResponse').innerHTML = 
+                    `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        async function createService() {
+            try {
+                const formData = new FormData();
+                formData.append('title', document.getElementById('serviceTitle').value);
+                formData.append('description', document.getElementById('serviceDesc').value);
+                formData.append('category', document.getElementById('serviceCategory').value);
+                formData.append('price', document.getElementById('servicePrice').value);
+                formData.append('priceType', document.getElementById('servicePriceType').value);
+                formData.append('availability', JSON.stringify(['Monday', 'Tuesday', 'Wednesday']));
+                formData.append('location', document.getElementById('serviceLocation').value);
+                formData.append('latitude', document.getElementById('serviceLat').value);
+                formData.append('longitude', document.getElementById('serviceLng').value);
+                formData.append('cityId', 'temp-city-id'); // You'd get this from cities list
+
+                const files = document.getElementById('serviceImages').files;
+                for (let i = 0; i < files.length; i++) {
+                    formData.append('images', files[i]);
+                }
+
+                const response = await fetch(`${API_BASE}/services`, {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || `HTTP ${response.status}`);
+                }
+
+                document.getElementById('servicesResponse').innerHTML = 
+                    `<span class="success">✅ Service created!</span><br>${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                document.getElementById('servicesResponse').innerHTML = 
+                    `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        async function getMyServices() {
+            try {
+                const status = document.getElementById('myServicesStatus').value;
+                let query = '/services/my-services';
+                if (status) query += `?status=${status}`;
+
+                const data = await apiCall(query);
+                document.getElementById('servicesResponse').innerHTML = 
+                    `<span class="success">✅ My Services Retrieved!</span><br>${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                document.getElementById('servicesResponse').innerHTML = 
+                    `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        // Profile functions
+        async function getProfile() {
+            try {
+                const data = await apiCall('/users/me');
+                document.getElementById('profileResponse').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('profileResponse').innerHTML = 
+                    `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        async function uploadAvatar() {
+            try {
+                const file = document.getElementById('avatarFile').files[0];
+                if (!file) {
+                    throw new Error('Please select a file');
+                }
+
+                const formData = new FormData();
+                formData.append('avatar', file);
+
+                const response = await fetch(`${API_BASE}/users/me/avatar`, {
+                    method: 'PUT',
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || `HTTP ${response.status}`);
+                }
+
+                document.getElementById('profileResponse').innerHTML = 
+                    `<span class="success">✅ Avatar uploaded!</span><br>${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                document.getElementById('profileResponse').innerHTML = 
+                    `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        // Admin functions
+        async function getAnalytics() {
+            try {
+                const data = await apiCall('/admin/analytics');
+                document.getElementById('adminResponse').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('adminResponse').innerHTML = 
+                    `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        async function getUsers() {
+            try {
+                const data = await apiCall('/admin/users');
+                document.getElementById('adminResponse').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('adminResponse').innerHTML = 
+                    `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        // Moderation functions
+        async function getPendingServices() {
+            try {
+                const data = await apiCall('/moderation/services/pending');
+                document.getElementById('moderationResponse').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('moderationResponse').innerHTML = 
+                    `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        // Load cities on page load
+        window.onload = function() {
+            getCities();
+        };
+    </script>
+</body>
+</html>

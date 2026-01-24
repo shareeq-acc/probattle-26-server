@@ -1,6 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn, Index } from "typeorm";
 import { User } from "./User";
 import { Booking } from "./Booking";
+import { City } from "./City";
 
 export enum ServiceCategory {
   TUTORING = 'tutoring',
@@ -20,6 +21,12 @@ export enum PriceType {
   HOURLY = 'hourly',
   FIXED = 'fixed',
   DAILY = 'daily'
+}
+
+export enum ApprovalStatus {
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  REJECTED = 'rejected'
 }
 
 @Entity()
@@ -63,6 +70,37 @@ export class Service {
 
   @Column({ default: true })
   isActive: boolean;
+
+  // NEW for Stage 2
+  @Column({ nullable: true })
+  @Index()
+  cityId: string;
+
+  @ManyToOne(() => City, city => city.services, { nullable: true })
+  city: City;
+
+  @Column('decimal', { precision: 10, scale: 7 })
+  latitude: number;
+
+  @Column('decimal', { precision: 10, scale: 7 })
+  longitude: number;
+
+  @Column({ nullable: true })
+  @Index()
+  h3Index: string;
+
+  @Column('simple-json', { default: '[]' })
+  images: string[];
+
+  @Column({ type: 'enum', enum: ApprovalStatus, default: ApprovalStatus.PENDING })
+  @Index()
+  approvalStatus: ApprovalStatus;
+
+  @Column({ nullable: true, type: 'varchar' })
+  approvedBy: string | null;
+
+  @Column({ nullable: true, type: 'timestamp' })
+  approvedAt: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;
