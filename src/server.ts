@@ -18,6 +18,9 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust proxy for Vercel deployment
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(cors({
   origin: true, // Allow all origins
@@ -86,23 +89,26 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-AppDataSource.initialize()
-  .then(() => {
-    console.log("✅ Database connected successfully");
-    console.log("🚀 Starting server...");
+// Initialize database and start server (only for local development)
+if (process.env.NODE_ENV !== 'production') {
+  AppDataSource.initialize()
+    .then(() => {
+      console.log("✅ Database connected successfully");
+      console.log("🚀 Starting server...");
 
-    app.listen(PORT, () => {
-      console.log(`🌟 Neighbourly API Stage 2 is running on port ${PORT}`);
-      console.log(`📍 Base URL: ${process.env.BASE_URL || `http://localhost:${PORT}`}`);
-      console.log(`📁 Upload directory: ${uploadDir}`);
-      console.log(`🗄️  Database: PostgreSQL`);
-      console.log(`🔐 JWT Access Token Expiry: ${process.env.JWT_ACCESS_EXPIRES_IN || '15m'}`);
-      console.log(`🔄 JWT Refresh Token Expiry: ${process.env.JWT_REFRESH_EXPIRES_IN || '7d'}`);
+      app.listen(PORT, () => {
+        console.log(`🌟 Neighbourly API Stage 2 is running on port ${PORT}`);
+        console.log(`📍 Base URL: ${process.env.BASE_URL || `http://localhost:${PORT}`}`);
+        console.log(`📁 Upload directory: ${uploadDir}`);
+        console.log(`🗄️  Database: PostgreSQL`);
+        console.log(`🔐 JWT Access Token Expiry: ${process.env.JWT_ACCESS_EXPIRES_IN || '15m'}`);
+        console.log(`🔄 JWT Refresh Token Expiry: ${process.env.JWT_REFRESH_EXPIRES_IN || '7d'}`);
+      });
+    })
+    .catch((error: any) => {
+      console.error("❌ Database connection failed:", error);
+      process.exit(1);
     });
-  })
-  .catch((error: any) => {
-    console.error("❌ Database connection failed:", error);
-    process.exit(1);
-  });
+}
 
 export default app;
