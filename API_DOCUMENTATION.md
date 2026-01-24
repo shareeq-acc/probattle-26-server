@@ -262,6 +262,20 @@ GET /services?lat=40.7128&lng=-74.0060&radius=10&category=tutoring&page=1&limit=
 }
 ```
 
+### GET /services/my-services
+Get services for logged-in provider. **[Protected - Provider/Both role required]**
+
+**Query Parameters:**
+- `status` (string) - Filter by approval status (pending/approved/rejected)
+- `includeInactive` (boolean, default: false) - Include inactive services
+- `page` (number, default: 1)
+- `limit` (number, default: 20, max: 100)
+
+**Example:**
+```
+GET /services/my-services?includeInactive=true&status=approved&page=1&limit=20
+```
+
 ### POST /services
 Create new service. **[Provider/Both role required]**
 
@@ -280,6 +294,54 @@ Create new service. **[Provider/Both role required]**
 
 ### PUT /services/:id
 Update service. **[Protected - Owner only]**
+
+### PATCH /services/:id/toggle-active
+Toggle service active status. **[Protected - Owner only]**
+
+**Response:**
+```json
+{
+  "message": "Service activated successfully",
+  "isActive": true,
+  "service": {
+    "id": "uuid",
+    "title": "Math Tutoring",
+    "isActive": true
+  }
+}
+```
+
+### PATCH /services/:id/activate
+Activate service (set isActive to true). **[Protected - Owner only]**
+
+**Response:**
+```json
+{
+  "message": "Service activated successfully",
+  "isActive": true,
+  "service": {
+    "id": "uuid",
+    "title": "Math Tutoring",
+    "isActive": true
+  }
+}
+```
+
+### PATCH /services/:id/deactivate
+Deactivate service (set isActive to false). **[Protected - Owner only]**
+
+**Response:**
+```json
+{
+  "message": "Service deactivated successfully",
+  "isActive": false,
+  "service": {
+    "id": "uuid",
+    "title": "Math Tutoring",
+    "isActive": false
+  }
+}
+```
 
 ### DELETE /services/:id/images
 Delete specific service image. **[Protected - Owner only]**
