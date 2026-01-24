@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Statistics API Test - Neighbourly Stage 2</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .endpoint {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        .endpoint-header {
+            background: #f8f9fa;
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .endpoint-header:hover {
+            background: #e9ecef;
+        }
+        .method {
+            padding: 4px 8px;
+            border-radius: 4px;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .get { background: #28a745; }
+        .post { background: #007bff; }
+        .put { background: #ffc107; color: #000; }
+        .delete { background: #dc3545; }
+        .endpoint-body {
+            padding: 15px;
+            display: none;
+        }
+        .endpoint-body.active {
+            display: block;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .form-group {
+            margin: 10px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .response {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success {
+            border-color: #28a745;
+            background-color: #d4edda;
+        }
+        .error {
+            border-color: #dc3545;
+            background-color: #f8d7da;
+        }
+        .auth-section {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>📊 Statistics API Test - Neighbourly Stage 2</h1>
+    
+    <div class="auth-section">
+        <h3>🔐 Authentication</h3>
+        <div class="form-group">
+            <label>Access Token:</label>
+            <input type="text" id="accessToken" placeholder="Enter your access token here">
+        </div>
+        <button onclick="testAuth()">Test Authentication</button>
+        <div id="authResponse" class="response" style="display: none;"></div>
+    </div>
+
+    <div class="container">
+        <h2>📈 Statistics Endpoints</h2>
+        <p>Test comprehensive statistics for providers and seekers</p>
+
+        <!-- General Statistics -->
+        <div class="endpoint">
+            <div class="endpoint-header" onclick="toggleEndpoint('general-stats')">
+                <div>
+                    <span class="method get">GET</span>
+                    <strong>/api/bookings/statistics</strong>
+                    <span style="margin-left: 10px; color: #666;">Complete statistics for both provider and seeker</span>
+                </div>
+                <span>▼</span>
+            </div>
+            <div class="endpoint-body" id="general-stats">
+                <p>Get comprehensive statistics including provider earnings, seeker spending, recent bookings, and monthly trends.</p>
+                <button onclick="getGeneralStatistics()">Get General Statistics</button>
+                <div id="generalStatsResponse" class="response" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Provider Statistics -->
+        <div class="endpoint">
+            <div class="endpoint-header" onclick="toggleEndpoint('provider-stats')">
+                <div>
+                    <span class="method get">GET</span>
+                    <strong>/api/bookings/provider-statistics</strong>
+                    <span style="margin-left: 10px; color: #666;">Detailed provider statistics</span>
+                </div>
+                <span>▼</span>
+            </div>
+            <div class="endpoint-body" id="provider-stats">
+                <p>Get detailed provider statistics including earnings, completion rate, top services, and performance metrics.</p>
+                <button onclick="getProviderStatistics()">Get Provider Statistics</button>
+                <div id="providerStatsResponse" class="response" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Seeker Statistics -->
+        <div class="endpoint">
+            <div class="endpoint-header" onclick="toggleEndpoint('seeker-stats')">
+                <div>
+                    <span class="method get">GET</span>
+                    <strong>/api/bookings/seeker-statistics</strong>
+                    <span style="margin-left: 10px; color: #666;">Detailed seeker statistics</span>
+                </div>
+                <span>▼</span>
+            </div>
+            <div class="endpoint-body" id="seeker-stats">
+                <p>Get detailed seeker statistics including spending, favorite categories, and preferred providers.</p>
+                <button onclick="getSeekerStatistics()">Get Seeker Statistics</button>
+                <div id="seekerStatsResponse" class="response" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Service Statistics -->
+        <div class="endpoint">
+            <div class="endpoint-header" onclick="toggleEndpoint('service-stats')">
+                <div>
+                    <span class="method get">GET</span>
+                    <strong>/api/services/statistics</strong>
+                    <span style="margin-left: 10px; color: #666;">Service and booking statistics</span>
+                </div>
+                <span>▼</span>
+            </div>
+            <div class="endpoint-body" id="service-stats">
+                <p>Get service statistics including service counts, booking performance, and category breakdown.</p>
+                <button onclick="getServiceStatistics()">Get Service Statistics</button>
+                <div id="serviceStatsResponse" class="response" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Dashboard Stats -->
+        <div class="endpoint">
+            <div class="endpoint-header" onclick="toggleEndpoint('dashboard-stats')">
+                <div>
+                    <span class="method get">GET</span>
+                    <strong>/api/services/dashboard-stats</strong>
+                    <span style="margin-left: 10px; color: #666;">Quick dashboard statistics</span>
+                </div>
+                <span>▼</span>
+            </div>
+            <div class="endpoint-body" id="dashboard-stats">
+                <p>Get quick dashboard statistics for provider overview cards.</p>
+                <button onclick="getDashboardStats()">Get Dashboard Stats</button>
+                <div id="dashboardStatsResponse" class="response" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>📋 Statistics Overview</h2>
+        <div class="stats-grid" id="statsOverview" style="display: none;">
+            <!-- Stats cards will be populated here -->
+        </div>
+    </div>
+
+    <script>
+        const BASE_URL = 'http://localhost:5000';
+
+        function getAuthHeaders() {
+            const token = document.getElementById('accessToken').value;
+            if (!token) {
+                alert('Please enter an access token first');
+                return null;
+            }
+            return {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            };
+        }
+
+        function toggleEndpoint(id) {
+            const body = document.getElementById(id);
+            const header = body.previousElementSibling;
+            const arrow = header.querySelector('span:last-child');
+            
+            body.classList.toggle('active');
+            arrow.textContent = body.classList.contains('active') ? '▲' : '▼';
+        }
+
+        function displayResponse(elementId, response, isError = false) {
+            const element = document.getElementById(elementId);
+            element.style.display = 'block';
+            element.className = `response ${isError ? 'error' : 'success'}`;
+            element.textContent = JSON.stringify(response, null, 2);
+        }
+
+        async function testAuth() {
+            const headers = getAuthHeaders();
+            if (!headers) return;
+
+            try {
+                const response = await fetch(`${BASE_URL}/api/users/me`, { headers });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayResponse('authResponse', { 
+                        status: 'Authentication successful', 
+                        user: data 
+                    });
+                } else {
+                    displayResponse('authResponse', data, true);
+                }
+            } catch (error) {
+                displayResponse('authResponse', { error: error.message }, true);
+            }
+        }
+
+        async function getGeneralStatistics() {
+            const headers = getAuthHeaders();
+            if (!headers) return;
+
+            try {
+                const response = await fetch(`${BASE_URL}/api/bookings/statistics`, { headers });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayResponse('generalStatsResponse', data);
+                    updateStatsOverview(data);
+                } else {
+                    displayResponse('generalStatsResponse', data, true);
+                }
+            } catch (error) {
+                displayResponse('generalStatsResponse', { error: error.message }, true);
+            }
+        }
+
+        async function getProviderStatistics() {
+            const headers = getAuthHeaders();
+            if (!headers) return;
+
+            try {
+                const response = await fetch(`${BASE_URL}/api/bookings/provider-statistics`, { headers });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayResponse('providerStatsResponse', data);
+                } else {
+                    displayResponse('providerStatsResponse', data, true);
+                }
+            } catch (error) {
+                displayResponse('providerStatsResponse', { error: error.message }, true);
+            }
+        }
+
+        async function getSeekerStatistics() {
+            const headers = getAuthHeaders();
+            if (!headers) return;
+
+            try {
+                const response = await fetch(`${BASE_URL}/api/bookings/seeker-statistics`, { headers });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayResponse('seekerStatsResponse', data);
+                } else {
+                    displayResponse('seekerStatsResponse', data, true);
+                }
+            } catch (error) {
+                displayResponse('seekerStatsResponse', { error: error.message }, true);
+            }
+        }
+
+        async function getServiceStatistics() {
+            const headers = getAuthHeaders();
+            if (!headers) return;
+
+            try {
+                const response = await fetch(`${BASE_URL}/api/services/statistics`, { headers });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayResponse('serviceStatsResponse', data);
+                } else {
+                    displayResponse('serviceStatsResponse', data, true);
+                }
+            } catch (error) {
+                displayResponse('serviceStatsResponse', { error: error.message }, true);
+            }
+        }
+
+        async function getDashboardStats() {
+            const headers = getAuthHeaders();
+            if (!headers) return;
+
+            try {
+                const response = await fetch(`${BASE_URL}/api/services/dashboard-stats`, { headers });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayResponse('dashboardStatsResponse', data);
+                } else {
+                    displayResponse('dashboardStatsResponse', data, true);
+                }
+            } catch (error) {
+                displayResponse('dashboardStatsResponse', { error: error.message }, true);
+            }
+        }
+
+        function updateStatsOverview(data) {
+            const overview = document.getElementById('statsOverview');
+            overview.style.display = 'grid';
+            
+            const providerStats = data.provider;
+            const seekerStats = data.seeker;
+            
+            overview.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">$${providerStats.totalEarnings.toFixed(2)}</div>
+                    <div class="stat-label">Total Earnings</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${providerStats.pendingRequests}</div>
+                    <div class="stat-label">Pending Requests</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${providerStats.completedBookings}</div>
+                    <div class="stat-label">Completed Bookings</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${providerStats.completionRate}%</div>
+                    <div class="stat-label">Completion Rate</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">$${seekerStats.totalSpent.toFixed(2)}</div>
+                    <div class="stat-label">Total Spent</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${seekerStats.totalBookings}</div>
+                    <div class="stat-label">Total Bookings Made</div>
+                </div>
+            `;
+        }
+
+        // Auto-expand first endpoint
+        document.addEventListener('DOMContentLoaded', function() {
+            toggleEndpoint('general-stats');
+        });
+    </script>
+</body>
+</html>

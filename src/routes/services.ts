@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { AppDataSource } from "../data-source";
 import { Service, ApprovalStatus } from "../entities/Service";
+import { Booking, BookingStatus } from "../entities/Booking";
 import { authenticateToken, AuthRequest, requireProvider } from "../middleware/auth";
 import { uploadServiceImages, deleteCloudinaryImage } from "../middleware/cloudinaryUpload";
 import { generalLimiter, uploadLimiter } from "../middleware/rateLimiter";
@@ -10,6 +11,7 @@ import { Like, In } from "typeorm";
 
 const router = Router();
 const serviceRepository = AppDataSource.getRepository(Service);
+const bookingRepository = AppDataSource.getRepository(Booking);
 
 // GET /api/services/my-services (Get services for logged-in provider)
 router.get("/my-services", authenticateToken, generalLimiter, async (req: AuthRequest, res: Response) => {
@@ -409,3 +411,160 @@ router.delete("/:id", authenticateToken, async (req: AuthRequest, res: Response)
 });
 
 export default router;
+
+// GET /api/services/statistics
+router.get("/statistics", authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+
+    // Get service statistics
+    const serviceStats = await serviceRepository
+      .createQueryBuilder("service")
+      .select([
+        "COUNT(*)::int as totalServices",
+        "SUM(CASE WHEN service.isActive = true THEN 1 ELSE 0 END)::int as activeServices",
+        "SUM(CASE WHEN service.approvalStatus = 'pending' THEN 1 ELSE 0 END)::int as pendingApproval",
+        "SUM(CASE WHEN service.approvalStatus = 'approved' THEN 1 ELSE 0 END)::int as approvedServices",
+        "SUM(CASE WHEN service.approvalStatus = 'rejected' THEN 1 ELSE 0 END)::int as rejectedServices",
+        "COALESCE(AVG(service.price), 0)::decimal as avgPrice"
+      ])
+      .where("service.providerId = :userId", { userId })
+      .getRawOne();
+
+    // Get booking statistics for user's services
+    const bookingStats = await bookingRepository
+      .createQueryBuilder("booking")
+      .leftJoin("booking.service", "service")
+      .select([
+        "COUNT(*)::int as totalBookings",
+        "SUM(CASE WHEN booking.status = 'pending' THEN 1 ELSE 0 END)::int as pendingBookings",
+        "SUM(CASE WHEN booking.status = 'accepted' THEN 1 ELSE 0 END)::int as acceptedBookings",
+        "SUM(CASE WHEN booking.status = 'completed' THEN 1 ELSE 0 END)::int as completedBookings",
+        "SUM(CASE WHEN booking.status = 'cancelled' THEN 1 ELSE 0 END)::int as cancelledBookings",
+        "COALESCE(SUM(CASE WHEN booking.status = 'completed' THEN booking.totalPrice ELSE 0 END), 0)::decimal as totalEarnings"
+      ])
+      .where("service.providerId = :userId", { userId })
+      .getRawOne();
+
+    // Get service performance (services with most bookings)
+    const servicePerformance = await bookingRepository
+      .createQueryBuilder("booking")
+      .leftJoinAndSelect("booking.service", "service")
+      .select([
+        "service.id",
+        "service.title",
+        "service.category",
+        "COUNT(booking.id)::int as bookingCount",
+        "COALESCE(SUM(CASE WHEN booking.status = 'completed' THEN booking.totalPrice ELSE 0 END), 0)::decimal as earnings",
+        "COALESCE(AVG(booking.totalPrice), 0)::decimal as avgBookingValue"
+      ])
+      .where("service.providerId = :userId", { userId })
+      .groupBy("service.id, service.title, service.category")
+      .orderBy("bookingCount", "DESC")
+      .limit(10)
+      .getRawMany();
+
+    // Get category breakdown
+    const categoryStats = await serviceRepository
+      .createQueryBuilder("service")
+      .select([
+        "service.category",
+        "COUNT(*)::int as serviceCount",
+        "COALESCE(AVG(service.price), 0)::decimal as avgPrice"
+      ])
+      .where("service.providerId = :userId", { userId })
+      .groupBy("service.category")
+      .orderBy("serviceCount", "DESC")
+      .getRawMany();
+
+    res.json({
+      services: {
+        total: serviceStats.totalServices || 0,
+        active: serviceStats.activeServices || 0,
+        pendingApproval: serviceStats.pendingApproval || 0,
+        approved: serviceStats.approvedServices || 0,
+        rejected: serviceStats.rejectedServices || 0,
+        avgPrice: parseFloat(serviceStats.avgPrice || 0)
+      },
+      bookings: {
+        total: bookingStats.totalBookings || 0,
+        pending: bookingStats.pendingBookings || 0,
+        accepted: bookingStats.acceptedBookings || 0,
+        completed: bookingStats.completedBookings || 0,
+        cancelled: bookingStats.cancelledBookings || 0,
+        totalEarnings: parseFloat(bookingStats.totalEarnings || 0)
+      },
+      servicePerformance: servicePerformance.map(service => ({
+        id: service.service_id,
+        title: service.service_title,
+        category: service.service_category,
+        bookingCount: service.bookingCount || 0,
+        earnings: parseFloat(service.earnings || 0),
+        avgBookingValue: parseFloat(service.avgBookingValue || 0)
+      })),
+      categoryBreakdown: categoryStats.map(cat => ({
+        category: cat.service_category,
+        serviceCount: cat.serviceCount || 0,
+        avgPrice: parseFloat(cat.avgPrice || 0)
+      }))
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// GET /api/services/dashboard-stats
+router.get("/dashboard-stats", authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+
+    // Get basic service counts
+    const activeServices = await serviceRepository.count({
+      where: { providerId: userId, isActive: true, approvalStatus: ApprovalStatus.APPROVED }
+    });
+
+    // Get pending requests (bookings)
+    const pendingRequests = await bookingRepository.count({
+      where: { providerId: userId, status: BookingStatus.PENDING }
+    });
+
+    // Get total earnings (completed bookings)
+    const earningsResult = await bookingRepository
+      .createQueryBuilder("booking")
+      .select("COALESCE(SUM(booking.totalPrice), 0)::decimal as totalEarnings")
+      .where("booking.providerId = :userId", { userId })
+      .andWhere("booking.status = :status", { status: BookingStatus.COMPLETED })
+      .getRawOne();
+
+    // Get completion rate
+    const completionStats = await bookingRepository
+      .createQueryBuilder("booking")
+      .select([
+        "COUNT(*)::int as totalBookings",
+        "SUM(CASE WHEN booking.status = 'completed' THEN 1 ELSE 0 END)::int as completedBookings"
+      ])
+      .where("booking.providerId = :userId", { userId })
+      .andWhere("booking.status != :cancelled", { cancelled: BookingStatus.CANCELLED })
+      .getRawOne();
+
+    const totalNonCancelled = completionStats.totalBookings || 0;
+    const completionRate = totalNonCancelled > 0 
+      ? (((completionStats.completedBookings || 0) / totalNonCancelled) * 100).toFixed(1)
+      : "0";
+
+    // Get average rating (placeholder - you might want to add a rating system)
+    const avgRating = "4.8"; // Placeholder
+
+    res.json({
+      activeServices,
+      pendingRequests,
+      completionRate: parseFloat(completionRate),
+      avgRating: parseFloat(avgRating),
+      totalEarnings: parseFloat(earningsResult.totalEarnings || 0)
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
