@@ -16,16 +16,20 @@ const bookingRepository = AppDataSource.getRepository(Booking);
 // GET /api/services/my-services (Get services for logged-in provider)
 router.get("/my-services", authenticateToken, generalLimiter, async (req: AuthRequest, res: Response) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
+    const { status, page = 1, limit = 20, includeInactive = 'false' } = req.query;
 
     const pageNum = parseInt(page as string);
     const limitNum = Math.min(parseInt(limit as string), 100);
     const offset = (pageNum - 1) * limitNum;
 
     let where: any = { 
-      providerId: req.user!.id,
-      isActive: true
+      providerId: req.user!.id
     };
+
+    // Include inactive services only if explicitly requested
+    if (includeInactive !== 'true') {
+      where.isActive = true;
+    }
 
     // Filter by approval status if provided
     if (status && Object.values(ApprovalStatus).includes(status as ApprovalStatus)) {
@@ -376,6 +380,111 @@ router.get("/:id", async (req: Request, res: Response) => {
     }
 
     res.json(service);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// PATCH /api/services/:id/toggle-active
+router.patch("/:id/toggle-active", authenticateToken, generalLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const service = await serviceRepository.findOne({ where: { id } });
+    if (!service) {
+      return res.status(404).json({ error: "Service not found" });
+    }
+
+    if (service.providerId !== req.user!.id) {
+      return res.status(403).json({ error: "Not authorized to modify this service" });
+    }
+
+    // Toggle the isActive status
+    service.isActive = !service.isActive;
+    await serviceRepository.save(service);
+
+    res.json({ 
+      message: `Service ${service.isActive ? 'activated' : 'deactivated'} successfully`,
+      isActive: service.isActive,
+      service: {
+        id: service.id,
+        title: service.title,
+        isActive: service.isActive
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// PATCH /api/services/:id/activate
+router.patch("/:id/activate", authenticateToken, generalLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const service = await serviceRepository.findOne({ where: { id } });
+    if (!service) {
+      return res.status(404).json({ error: "Service not found" });
+    }
+
+    if (service.providerId !== req.user!.id) {
+      return res.status(403).json({ error: "Not authorized to modify this service" });
+    }
+
+    if (service.isActive) {
+      return res.status(400).json({ error: "Service is already active" });
+    }
+
+    service.isActive = true;
+    await serviceRepository.save(service);
+
+    res.json({ 
+      message: "Service activated successfully",
+      isActive: service.isActive,
+      service: {
+        id: service.id,
+        title: service.title,
+        isActive: service.isActive
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// PATCH /api/services/:id/deactivate
+router.patch("/:id/deactivate", authenticateToken, generalLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const service = await serviceRepository.findOne({ where: { id } });
+    if (!service) {
+      return res.status(404).json({ error: "Service not found" });
+    }
+
+    if (service.providerId !== req.user!.id) {
+      return res.status(403).json({ error: "Not authorized to modify this service" });
+    }
+
+    if (!service.isActive) {
+      return res.status(400).json({ error: "Service is already inactive" });
+    }
+
+    service.isActive = false;
+    await serviceRepository.save(service);
+
+    res.json({ 
+      message: "Service deactivated successfully",
+      isActive: service.isActive,
+      service: {
+        id: service.id,
+        title: service.title,
+        isActive: service.isActive
+      }
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Server error" });
