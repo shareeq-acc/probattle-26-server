@@ -37,7 +37,7 @@ app.use("/api/reports", reportsRoutes);
 app.use("/api/admin", adminRoutes);
 
 app.get("/", (req, res) => {
-  res.json({ 
+  res.json({
     message: "Neighbourly API Stage 2 is running",
     version: "2.0.0",
     features: [
@@ -54,7 +54,7 @@ app.get("/", (req, res) => {
 
 // Health check endpoint
 app.get("/health", (req, res) => {
-  res.json({ 
+  res.json({
     status: "healthy",
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
@@ -64,15 +64,15 @@ app.get("/health", (req, res) => {
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error(err.stack);
-  
+
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({ error: 'File too large' });
   }
-  
+
   if (err.code === 'LIMIT_UNEXPECTED_FILE') {
     return res.status(400).json({ error: 'Unexpected file field' });
   }
-  
+
   res.status(500).json({ error: 'Something went wrong!' });
 });
 
@@ -85,7 +85,7 @@ AppDataSource.initialize()
   .then(() => {
     console.log("✅ Database connected successfully");
     console.log("🚀 Starting server...");
-    
+
     app.listen(PORT, () => {
       console.log(`🌟 Neighbourly API Stage 2 is running on port ${PORT}`);
       console.log(`📍 Base URL: ${process.env.BASE_URL || `http://localhost:${PORT}`}`);
@@ -99,3 +99,5 @@ AppDataSource.initialize()
     console.error("❌ Database connection failed:", error);
     process.exit(1);
   });
+
+export default app;
