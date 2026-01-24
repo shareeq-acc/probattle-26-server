@@ -1,6 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToOne } from "typeorm";
 import { Service } from "./Service";
 import { User } from "./User";
+import { Rating } from "./Rating";
 
 export enum BookingStatus {
   PENDING = 'pending',
@@ -59,4 +60,7 @@ export class Booking {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @OneToOne(() => Rating, rating => rating.booking)
+  rating: Rating;
 }
