@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import { Service } from "./Service";
 import { Booking } from "./Booking";
 import { RefreshToken } from "./RefreshToken";
+import { Rating } from "./Rating";
 
 export enum UserRole {
   SEEKER = 'seeker',       // Default user role
@@ -67,4 +68,10 @@ export class User {
 
   @OneToMany(() => RefreshToken, token => token.user)
   refreshTokens: RefreshToken[];
+
+  @OneToMany(() => Rating, rating => rating.seeker)
+  ratingsAsSeeker: Rating[];
+
+  @OneToMany(() => Rating, rating => rating.provider)
+  ratingsAsProvider: Rating[];
 }
