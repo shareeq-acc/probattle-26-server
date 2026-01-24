@@ -1,7 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn, Index } from "typeorm";
 import { User } from "./User";
 import { Booking } from "./Booking";
-import { City } from "./City";
 
 export enum ServiceCategory {
   TUTORING = 'tutoring',
@@ -66,19 +65,15 @@ export class Service {
   availability: string[];
 
   @Column()
-  location: string;
+  location: string; // neighbourhood from reverse geocoding
+
+  @Column({ nullable: true, type: 'varchar' })
+  city: string | null; // city name from reverse geocoding
 
   @Column({ default: true })
   isActive: boolean;
 
-  // NEW for Stage 2
-  @Column({ nullable: true })
-  @Index()
-  cityId: string;
-
-  @ManyToOne(() => City, city => city.services, { nullable: true })
-  city: City;
-
+  // Geospatial fields
   @Column('decimal', { precision: 10, scale: 7 })
   latitude: number;
 
@@ -92,7 +87,7 @@ export class Service {
   @Column('simple-json', { default: '[]' })
   images: string[];
 
-  @Column({ type: 'enum', enum: ApprovalStatus, default: ApprovalStatus.PENDING })
+  @Column({ type: 'enum', enum: ApprovalStatus, default: ApprovalStatus.APPROVED })
   @Index()
   approvalStatus: ApprovalStatus;
 

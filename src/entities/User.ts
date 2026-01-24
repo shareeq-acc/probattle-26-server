@@ -1,7 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, ManyToOne } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from "typeorm";
 import { Service } from "./Service";
 import { Booking } from "./Booking";
-import { City } from "./City";
 import { RefreshToken } from "./RefreshToken";
 
 export enum UserRole {
@@ -39,17 +38,11 @@ export class User {
   })
   role: UserRole;
 
-  @Column({ nullable: true })
-  cityId: string;
-
-  @ManyToOne(() => City, city => city.users, { nullable: true })
-  city: City;
+  @Column('decimal', { precision: 10, scale: 7, nullable: true })
+  latitude: number | null;
 
   @Column('decimal', { precision: 10, scale: 7, nullable: true })
-  latitude: number;
-
-  @Column('decimal', { precision: 10, scale: 7, nullable: true })
-  longitude: number;
+  longitude: number | null;
 
   @Column({ nullable: true, type: 'varchar' })
   avatar: string | null;

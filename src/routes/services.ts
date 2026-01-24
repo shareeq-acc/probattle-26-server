@@ -5,6 +5,7 @@ import { authenticateToken, AuthRequest, requireProvider } from "../middleware/a
 import { uploadServiceImages, deleteCloudinaryImage } from "../middleware/cloudinaryUpload";
 import { generalLimiter, uploadLimiter } from "../middleware/rateLimiter";
 import { calculateH3Index, getH3CellsInRadius, calculateDistance } from "../utils/spatial";
+import { reverseGeocode } from "../utils/geocoding";
 import { Like, In } from "typeorm";
 
 const router = Router();
@@ -31,7 +32,7 @@ router.get("/my-services", authenticateToken, generalLimiter, async (req: AuthRe
 
     const [services, total] = await serviceRepository.findAndCount({
       where,
-      relations: ["city"],
+      relations: [],
       order: { createdAt: "DESC" },
       skip: offset,
       take: limitNum
@@ -58,7 +59,7 @@ router.get("/my-services", authenticateToken, generalLimiter, async (req: AuthRe
 router.get("/", generalLimiter, async (req: Request, res: Response) => {
   try {
     const { 
-      lat, lng, radius, cityId, category, search, 
+      lat, lng, radius, city, category, search, 
       minPrice, maxPrice, priceType, page = 1, limit = 20 
     } = req.query;
 
@@ -72,7 +73,7 @@ router.get("/", generalLimiter, async (req: Request, res: Response) => {
     };
 
     // Apply filters
-    if (cityId) where.cityId = cityId;
+    if (city) where.city = Like(`%${city}%`);
     if (category) where.category = category;
     if (priceType) where.priceType = priceType;
     if (minPrice) where.price = { ...where.price, $gte: parseFloat(minPrice as string) };
@@ -94,7 +95,7 @@ router.get("/", generalLimiter, async (req: Request, res: Response) => {
 
       services = await serviceRepository.find({
         where,
-        relations: ["provider", "city"],
+        relations: ["provider"],
         order: { createdAt: "DESC" }
       });
 
@@ -115,7 +116,7 @@ router.get("/", generalLimiter, async (req: Request, res: Response) => {
       // Regular search without geospatial
       [services, total] = await serviceRepository.findAndCount({
         where,
-        relations: ["provider", "city"],
+        relations: ["provider"],
         order: { createdAt: "DESC" },
         skip: offset,
         take: limitNum
@@ -157,13 +158,13 @@ router.get("/", generalLimiter, async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/services (ENHANCED with images and geospatial)
+// POST /api/services (ENHANCED with reverse geocoding)
 router.post("/", authenticateToken, requireProvider, uploadLimiter, uploadServiceImages, async (req: AuthRequest, res: Response) => {
   try {
-    const { title, description, category, price, priceType, availability, location, latitude, longitude, cityId } = req.body;
+    const { title, description, category, price, priceType, availability, latitude, longitude } = req.body;
 
-    if (!title || !description || !category || !price || !priceType || !availability || !location || !latitude || !longitude || !cityId) {
-      return res.status(400).json({ error: "All fields including latitude, longitude, and cityId are required" });
+    if (!title || !description || !category || !price || !priceType || !availability || !latitude || !longitude) {
+      return res.status(400).json({ error: "All fields including latitude and longitude are required" });
     }
 
     if (price <= 0) {
@@ -181,9 +182,16 @@ router.post("/", authenticateToken, requireProvider, uploadLimiter, uploadServic
       return res.status(400).json({ error: "Invalid days in availability" });
     }
 
-    // Calculate H3 index
+    // Parse coordinates
     const lat = parseFloat(latitude);
     const lng = parseFloat(longitude);
+
+    // Reverse geocode to get city and location
+    console.log(`Reverse geocoding coordinates: ${lat}, ${lng}`);
+    const locationData = await reverseGeocode(lat, lng);
+    console.log('Geocoding result:', locationData);
+
+    // Calculate H3 index
     const h3Index = calculateH3Index(lat, lng);
 
     // Process uploaded images from Cloudinary
@@ -199,10 +207,10 @@ router.post("/", authenticateToken, requireProvider, uploadLimiter, uploadServic
       price: parseFloat(price),
       priceType,
       availability: availabilityArray,
-      location,
+      location: locationData.location, // neighbourhood from reverse geocoding
+      city: locationData.city, // city name from reverse geocoding
       latitude: lat,
       longitude: lng,
-      cityId,
       h3Index,
       images,
       approvalStatus: ApprovalStatus.PENDING,
@@ -213,7 +221,7 @@ router.post("/", authenticateToken, requireProvider, uploadLimiter, uploadServic
 
     const savedService = await serviceRepository.findOne({
       where: { id: service.id },
-      relations: ["provider", "city"]
+      relations: ["provider"]
     });
 
     if (savedService && savedService.provider) {
@@ -232,7 +240,7 @@ router.post("/", authenticateToken, requireProvider, uploadLimiter, uploadServic
 router.put("/:id", authenticateToken, uploadLimiter, uploadServiceImages, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, description, category, price, priceType, availability, location, latitude, longitude, cityId } = req.body;
+    const { title, description, category, price, priceType, availability, latitude, longitude } = req.body;
 
     const service = await serviceRepository.findOne({
       where: { id },
@@ -253,20 +261,24 @@ router.put("/:id", authenticateToken, uploadLimiter, uploadServiceImages, async 
     if (category !== undefined) service.category = category;
     if (price !== undefined) service.price = parseFloat(price);
     if (priceType !== undefined) service.priceType = priceType;
-    if (location !== undefined) service.location = location;
-    if (cityId !== undefined) service.cityId = cityId;
 
     if (availability !== undefined) {
       const availabilityArray = typeof availability === 'string' ? JSON.parse(availability) : availability;
       service.availability = availabilityArray;
     }
 
-    // Update coordinates and recalculate H3 index if changed
+    // Update coordinates and recalculate location if changed
     if (latitude !== undefined && longitude !== undefined) {
       const lat = parseFloat(latitude);
       const lng = parseFloat(longitude);
+      
+      // Reverse geocode new location
+      const locationData = await reverseGeocode(lat, lng);
+      
       service.latitude = lat;
       service.longitude = lng;
+      service.location = locationData.location;
+      service.city = locationData.city;
       service.h3Index = calculateH3Index(lat, lng);
     }
 
@@ -289,7 +301,7 @@ router.put("/:id", authenticateToken, uploadLimiter, uploadServiceImages, async 
 
     const updatedService = await serviceRepository.findOne({
       where: { id },
-      relations: ["provider", "city"]
+      relations: ["provider"]
     });
 
     if (updatedService && updatedService.provider) {
@@ -349,7 +361,7 @@ router.get("/:id", async (req: Request, res: Response) => {
   try {
     const service = await serviceRepository.findOne({
       where: { id: req.params.id },
-      relations: ["provider", "city"]
+      relations: ["provider"]
     });
 
     if (!service) {

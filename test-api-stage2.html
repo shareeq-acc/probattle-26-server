@@ -54,20 +54,13 @@
             </div>
         </div>
 
-        <!-- Cities Section -->
-        <div class="section">
-            <h2>🏙️ Cities</h2>
-            <button class="button" onclick="getCities()">Get All Cities</button>
-            <div id="citiesResponse" class="response"></div>
-        </div>
-
         <!-- Services Section -->
         <div class="section">
             <h2>🛠️ Services</h2>
             <div>
                 <h3>Search Services</h3>
-                <input type="number" id="searchLat" class="input" placeholder="Latitude" value="40.7128">
-                <input type="number" id="searchLng" class="input" placeholder="Longitude" value="-74.0060">
+                <input type="number" id="searchLat" class="input" placeholder="Latitude" value="24.8607">
+                <input type="number" id="searchLng" class="input" placeholder="Longitude" value="67.0011">
                 <input type="number" id="searchRadius" class="input" placeholder="Radius (km)" value="10">
                 <select id="searchCategory" class="input">
                     <option value="">All Categories</option>
@@ -76,6 +69,7 @@
                     <option value="cleaning">Cleaning</option>
                     <option value="gardening">Gardening</option>
                 </select>
+                <input type="text" id="searchCity" class="input" placeholder="City (optional)" value="">
                 <button class="button" onclick="searchServices()">Search Services</button>
             </div>
 
@@ -94,9 +88,9 @@
                     <option value="fixed">Fixed</option>
                     <option value="daily">Daily</option>
                 </select>
-                <input type="text" id="serviceLocation" class="input" placeholder="Location" value="New York, NY">
-                <input type="number" id="serviceLat" class="input" placeholder="Latitude" value="40.7589">
-                <input type="number" id="serviceLng" class="input" placeholder="Longitude" value="-73.9851">
+                <input type="text" id="serviceLocation" class="input" placeholder="Location (auto-filled)" value="" readonly>
+                <input type="number" id="serviceLat" class="input" placeholder="Latitude" value="24.8607">
+                <input type="number" id="serviceLng" class="input" placeholder="Longitude" value="67.0011">
                 <input type="file" id="serviceImages" class="file-input" multiple accept="image/*">
                 <button class="button" onclick="createService()">Create Service</button>
             </div>
@@ -307,9 +301,11 @@
                 const lng = document.getElementById('searchLng').value;
                 const radius = document.getElementById('searchRadius').value;
                 const category = document.getElementById('searchCategory').value;
+                const city = document.getElementById('searchCity').value;
 
                 let query = `/services?lat=${lat}&lng=${lng}&radius=${radius}`;
                 if (category) query += `&category=${category}`;
+                if (city) query += `&city=${city}`;
 
                 const data = await apiCall(query, { noAuth: true });
                 document.getElementById('servicesResponse').textContent = JSON.stringify(data, null, 2);
@@ -328,10 +324,8 @@
                 formData.append('price', document.getElementById('servicePrice').value);
                 formData.append('priceType', document.getElementById('servicePriceType').value);
                 formData.append('availability', JSON.stringify(['Monday', 'Tuesday', 'Wednesday']));
-                formData.append('location', document.getElementById('serviceLocation').value);
                 formData.append('latitude', document.getElementById('serviceLat').value);
                 formData.append('longitude', document.getElementById('serviceLng').value);
-                formData.append('cityId', 'temp-city-id'); // You'd get this from cities list
 
                 const files = document.getElementById('serviceImages').files;
                 for (let i = 0; i < files.length; i++) {
@@ -450,9 +444,9 @@
             }
         }
 
-        // Load cities on page load
+        // Load initial data on page load
         window.onload = function() {
-            getCities();
+            console.log('Neighbourly API Stage 2 Test Interface loaded');
         };
     </script>
 </body>

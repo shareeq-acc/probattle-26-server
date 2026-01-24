@@ -12,8 +12,7 @@ const userRepository = AppDataSource.getRepository(User);
 router.get("/me", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const user = await userRepository.findOne({ 
-      where: { id: req.user!.id },
-      relations: ['city']
+      where: { id: req.user!.id }
     });
 
     if (!user) {
@@ -32,7 +31,7 @@ router.get("/me", authenticateToken, async (req: AuthRequest, res: Response) => 
 // PUT /api/users/me
 router.put("/me", authenticateToken, generalLimiter, async (req: AuthRequest, res: Response) => {
   try {
-    const { name, phone, bio, cityId, latitude, longitude } = req.body;
+    const { name, phone, bio, latitude, longitude } = req.body;
     const userId = req.user!.id;
 
     const user = await userRepository.findOne({ where: { id: userId } });
@@ -44,16 +43,14 @@ router.put("/me", authenticateToken, generalLimiter, async (req: AuthRequest, re
     if (name !== undefined) user.name = name;
     if (phone !== undefined) user.phone = phone;
     if (bio !== undefined) user.bio = bio;
-    if (cityId !== undefined) user.cityId = cityId;
-    if (latitude !== undefined) user.latitude = latitude;
-    if (longitude !== undefined) user.longitude = longitude;
+    if (latitude !== undefined) user.latitude = parseFloat(latitude);
+    if (longitude !== undefined) user.longitude = parseFloat(longitude);
 
     await userRepository.save(user);
 
-    // Fetch updated user with relations
+    // Fetch updated user
     const updatedUser = await userRepository.findOne({
-      where: { id: userId },
-      relations: ['city']
+      where: { id: userId }
     });
 
     const { password: _, ...userWithoutPassword } = updatedUser!;

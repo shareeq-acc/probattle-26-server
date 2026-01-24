@@ -21,8 +21,7 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
     // Get user from database to ensure they still exist and get latest data
     const userRepository = AppDataSource.getRepository(User);
     const user = await userRepository.findOne({
-      where: { id: payload.userId },
-      relations: ['city']
+      where: { id: payload.userId }
     });
 
     if (!user) {

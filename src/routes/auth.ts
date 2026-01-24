@@ -3,7 +3,6 @@ import bcrypt from "bcryptjs";
 import { AppDataSource } from "../data-source";
 import { User } from "../entities/User";
 import { generateTokenPair, verifyRefreshToken, findValidRefreshToken, revokeRefreshToken } from "../utils/jwt";
-import { calculateH3Index } from "../utils/spatial";
 import { authLimiter } from "../middleware/rateLimiter";
 
 const router = Router();
@@ -12,7 +11,7 @@ const userRepository = AppDataSource.getRepository(User);
 // POST /api/auth/register
 router.post("/register", authLimiter, async (req: Request, res: Response) => {
   try {
-    const { email, password, name, phone, role, bio, cityId, latitude, longitude } = req.body;
+    const { email, password, name, phone, role, bio, latitude, longitude } = req.body;
 
     if (!email || !password || !name) {
       return res.status(400).json({ error: "Email, password, and name are required" });
@@ -36,9 +35,8 @@ router.post("/register", authLimiter, async (req: Request, res: Response) => {
       phone,
       role,
       bio,
-      cityId,
-      latitude,
-      longitude
+      latitude: latitude ? parseFloat(latitude) : null,
+      longitude: longitude ? parseFloat(longitude) : null
     });
 
     await userRepository.save(user);
@@ -69,8 +67,7 @@ router.post("/login", authLimiter, async (req: Request, res: Response) => {
     }
 
     const user = await userRepository.findOne({ 
-      where: { email },
-      relations: ['city']
+      where: { email }
     });
     
     if (!user) {

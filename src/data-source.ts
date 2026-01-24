@@ -3,7 +3,6 @@ import * as dotenv from "dotenv";
 import { User } from "./entities/User";
 import { Service } from "./entities/Service";
 import { Booking } from "./entities/Booking";
-import { City } from "./entities/City";
 import { RefreshToken } from "./entities/RefreshToken";
 import { Report } from "./entities/Report";
 
@@ -14,7 +13,7 @@ export const AppDataSource = new DataSource({
   url: process.env.DATABASE_URL,
   synchronize: process.env.NODE_ENV === "development",
   logging: process.env.NODE_ENV === "development",
-  entities: [User, Service, Booking, City, RefreshToken, Report],
+  entities: [User, Service, Booking, RefreshToken, Report],
   migrations: ["src/migrations/**/*.ts"],
   ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
 });
