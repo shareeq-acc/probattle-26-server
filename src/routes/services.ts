@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { AppDataSource } from "../data-source";
 import { Service, ApprovalStatus } from "../entities/Service";
 import { Booking, BookingStatus } from "../entities/Booking";
+import { Rating } from "../entities/Rating";
 import { authenticateToken, AuthRequest, requireProvider } from "../middleware/auth";
 import { uploadServiceImages, deleteCloudinaryImage } from "../middleware/cloudinaryUpload";
 import { generalLimiter, uploadLimiter } from "../middleware/rateLimiter";
@@ -12,6 +13,7 @@ import { Like, In } from "typeorm";
 const router = Router();
 const serviceRepository = AppDataSource.getRepository(Service);
 const bookingRepository = AppDataSource.getRepository(Booking);
+const ratingRepository = AppDataSource.getRepository(Rating);
 
 // GET /api/services/my-services (Get services for logged-in provider)
 router.get("/my-services", authenticateToken, generalLimiter, async (req: AuthRequest, res: Response) => {
@@ -61,12 +63,13 @@ router.get("/my-services", authenticateToken, generalLimiter, async (req: AuthRe
   }
 });
 
-// GET /api/services (ENHANCED with geospatial search)
+// GET /api/services (ENHANCED with geospatial search and sorting)
 router.get("/", generalLimiter, async (req: Request, res: Response) => {
   try {
     const { 
       lat, lng, radius, city, category, search, 
-      minPrice, maxPrice, priceType, page = 1, limit = 20 
+      minPrice, maxPrice, priceType, page = 1, limit = 20,
+      sortBy = 'newest' // Options: 'newest', 'nearest', 'rating', 'price_low', 'price_high'
     } = req.query;
 
     const pageNum = parseInt(page as string);
@@ -87,46 +90,46 @@ router.get("/", generalLimiter, async (req: Request, res: Response) => {
 
     let services: any[];
     let total: number;
+    const userLat = lat ? parseFloat(lat as string) : null;
+    const userLng = lng ? parseFloat(lng as string) : null;
+    const radiusKm = radius ? parseFloat(radius as string) : null;
 
-    // Geospatial search with H3
-    if (lat && lng && radius) {
-      const latitude = parseFloat(lat as string);
-      const longitude = parseFloat(lng as string);
-      const radiusKm = parseFloat(radius as string);
-
+    // Geospatial search with H3 (if location provided)
+    if (userLat && userLng && radiusKm) {
       // Get H3 cells within radius
-      const h3Cells = getH3CellsInRadius(latitude, longitude, radiusKm);
-      
+      const h3Cells = getH3CellsInRadius(userLat, userLng, radiusKm);
       where.h3Index = In(h3Cells);
 
       services = await serviceRepository.find({
         where,
-        relations: ["provider"],
-        order: { createdAt: "DESC" }
+        relations: ["provider"]
       });
 
       // Filter by exact distance and calculate distance for each service
       services = services
         .map((service: any) => {
-          const distance = calculateDistance(latitude, longitude, service.latitude, service.longitude);
+          const distance = calculateDistance(userLat, userLng, service.latitude, service.longitude);
           return { ...service, distance };
         })
-        .filter((service: any) => service.distance <= radiusKm)
-        .sort((a: any, b: any) => a.distance - b.distance);
+        .filter((service: any) => service.distance <= radiusKm);
 
       total = services.length;
-
-      // Apply pagination after distance filtering
-      services = services.slice(offset, offset + limitNum);
     } else {
-      // Regular search without geospatial
-      [services, total] = await serviceRepository.findAndCount({
+      // Regular search without geospatial filtering
+      services = await serviceRepository.find({
         where,
-        relations: ["provider"],
-        order: { createdAt: "DESC" },
-        skip: offset,
-        take: limitNum
+        relations: ["provider"]
       });
+
+      // Add distance calculation if user location is provided (for sorting)
+      if (userLat && userLng) {
+        services = services.map((service: any) => {
+          const distance = calculateDistance(userLat, userLng, service.latitude, service.longitude);
+          return { ...service, distance };
+        });
+      }
+
+      total = services.length;
     }
 
     // Apply text search if provided
@@ -139,23 +142,113 @@ router.get("/", generalLimiter, async (req: Request, res: Response) => {
       total = services.length;
     }
 
-    // Clean up provider data
-    services.forEach((service: any) => {
+    // Get ratings for all services to enable rating-based sorting
+    const serviceIds = services.map(service => service.id);
+    let serviceRatings: { [key: string]: { avgRating: number; reviewCount: number } } = {};
+
+    if (serviceIds.length > 0) {
+      const ratingsData = await ratingRepository
+        .createQueryBuilder("rating")
+        .leftJoin("rating.booking", "booking")
+        .leftJoin("booking.service", "service")
+        .select([
+          "service.id as serviceId",
+          "AVG(rating.score)::decimal as avgRating",
+          "COUNT(rating.id)::int as reviewCount"
+        ])
+        .where("service.id IN (:...serviceIds)", { serviceIds })
+        .groupBy("service.id")
+        .getRawMany();
+
+      // Convert to lookup object
+      ratingsData.forEach(rating => {
+        serviceRatings[rating.serviceId] = {
+          avgRating: parseFloat(rating.avgRating || 0),
+          reviewCount: rating.reviewCount || 0
+        };
+      });
+    }
+
+    // Add rating data to services
+    services = services.map((service: any) => {
+      const ratingData = serviceRatings[service.id] || { avgRating: 0, reviewCount: 0 };
+      return {
+        ...service,
+        avgRating: ratingData.avgRating,
+        reviewCount: ratingData.reviewCount
+      };
+    });
+
+    // Apply sorting
+    switch (sortBy) {
+      case 'nearest':
+        if (userLat && userLng) {
+          services.sort((a: any, b: any) => (a.distance || 0) - (b.distance || 0));
+        } else {
+          // If no location provided, sort by newest as fallback
+          services.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        }
+        break;
+      
+      case 'rating':
+        services.sort((a: any, b: any) => {
+          // First sort by average rating (descending)
+          if (b.avgRating !== a.avgRating) {
+            return b.avgRating - a.avgRating;
+          }
+          // If ratings are equal, sort by review count (descending)
+          return b.reviewCount - a.reviewCount;
+        });
+        break;
+      
+      case 'price_low':
+        services.sort((a: any, b: any) => parseFloat(a.price) - parseFloat(b.price));
+        break;
+      
+      case 'price_high':
+        services.sort((a: any, b: any) => parseFloat(b.price) - parseFloat(a.price));
+        break;
+      
+      case 'newest':
+      default:
+        services.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        break;
+    }
+
+    // Apply pagination after sorting
+    const paginatedServices = services.slice(offset, offset + limitNum);
+
+    // Clean up provider data and format response
+    paginatedServices.forEach((service: any) => {
       if (service.provider) {
         const { password: _, ...providerWithoutPassword } = service.provider;
         service.provider = providerWithoutPassword;
+      }
+      
+      // Round rating to 1 decimal place
+      if (service.avgRating) {
+        service.avgRating = Math.round(service.avgRating * 10) / 10;
+      }
+      
+      // Round distance to 2 decimal places if present
+      if (service.distance !== undefined) {
+        service.distance = Math.round(service.distance * 100) / 100;
       }
     });
 
     const totalPages = Math.ceil(total / limitNum);
 
     res.json({ 
-      services,
+      services: paginatedServices,
       pagination: {
         page: pageNum,
         limit: limitNum,
         total,
         totalPages
+      },
+      sorting: {
+        sortBy,
+        availableSorts: ['newest', 'nearest', 'rating', 'price_low', 'price_high']
       }
     });
   } catch (error) {
@@ -373,6 +466,10 @@ router.get("/:id", async (req: Request, res: Response) => {
     if (!service) {
       return res.status(404).json({ error: "Service not found" });
     }
+
+    // Increment view count
+    service.views = (service.views || 0) + 1;
+    await serviceRepository.save(service);
 
     if (service.provider) {
       const { password: _, ...providerWithoutPassword } = service.provider;

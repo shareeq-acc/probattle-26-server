@@ -2,12 +2,14 @@ import { Router, Response } from "express";
 import { AppDataSource } from "../data-source";
 import { Booking, BookingStatus } from "../entities/Booking";
 import { Service } from "../entities/Service";
+import { Rating } from "../entities/Rating";
 import { authMiddleware, AuthRequest } from "../middleware/auth";
 import { Between, MoreThanOrEqual } from "typeorm";
 
 const router = Router();
 const bookingRepository = AppDataSource.getRepository(Booking);
 const serviceRepository = AppDataSource.getRepository(Service);
+const ratingRepository = AppDataSource.getRepository(Rating);
 
 // POST /api/bookings
 router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -519,22 +521,44 @@ router.get("/my-bookings", authMiddleware, async (req: AuthRequest, res: Respons
       .addOrderBy("booking.requestedTime", "DESC")
       .getMany();
 
-    bookings.forEach((booking: any) => {
-      if (booking.service?.provider) {
-        const { password: _, ...providerWithoutPassword } = booking.service.provider;
-        booking.service.provider = providerWithoutPassword as any;
-      }
-      if (booking.seeker) {
-        const { password: _, ...seekerWithoutPassword } = booking.seeker;
-        booking.seeker = seekerWithoutPassword as any;
-      }
-      if (booking.provider) {
-        const { password: _, ...providerWithoutPassword } = booking.provider;
-        booking.provider = providerWithoutPassword as any;
-      }
-    });
+    // For completed bookings, fetch associated ratings and reviews
+    const bookingsWithRatings = await Promise.all(
+      bookings.map(async (booking: any) => {
+        // Clean up password fields
+        if (booking.service?.provider) {
+          const { password: _, ...providerWithoutPassword } = booking.service.provider;
+          booking.service.provider = providerWithoutPassword as any;
+        }
+        if (booking.seeker) {
+          const { password: _, ...seekerWithoutPassword } = booking.seeker;
+          booking.seeker = seekerWithoutPassword as any;
+        }
+        if (booking.provider) {
+          const { password: _, ...providerWithoutPassword } = booking.provider;
+          booking.provider = providerWithoutPassword as any;
+        }
 
-    res.json({ bookings });
+        // If booking is completed, fetch the rating and review
+        if (booking.status === BookingStatus.COMPLETED) {
+          const rating = await ratingRepository.findOne({
+            where: { bookingId: booking.id }
+          });
+
+          if (rating) {
+            booking.rating = {
+              id: rating.id,
+              score: rating.score,
+              review: rating.review,
+              createdAt: rating.createdAt
+            };
+          }
+        }
+
+        return booking;
+      })
+    );
+
+    res.json({ bookings: bookingsWithRatings });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Server error" });

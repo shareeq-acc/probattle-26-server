@@ -97,6 +97,9 @@ export class Service {
   @Column({ nullable: true, type: 'timestamp' })
   approvedAt: Date | null;
 
+  @Column({ default: 0 })
+  views: number;
+
   @CreateDateColumn()
   createdAt: Date;
 
