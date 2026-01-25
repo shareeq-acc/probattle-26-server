@@ -6,6 +6,7 @@ import { Booking, BookingStatus } from "../entities/Booking";
 import { Rating } from "../entities/Rating";
 import { authenticateToken, AuthRequest, requireAdmin } from "../middleware/auth";
 import { generalLimiter } from "../middleware/rateLimiter";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const router = Router();
 const userRepository = AppDataSource.getRepository(User);
@@ -59,29 +60,14 @@ Respond in JSON format only:
 }`;
 
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: prompt
-            }]
-          }]
-        }),
-      }
-    );
+    // Initialize Google Generative AI
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    if (!response.ok) {
-      throw new Error(`Google AI API error: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json() as any;
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    // Generate content
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
 
     if (!text) {
       throw new Error("No response from Google AI");
@@ -524,6 +510,66 @@ router.get("/services", authenticateToken, requireAdmin, generalLimiter, async (
           if (b.reviewCount === 0) return -1;
           return a.avgRating - b.avgRating;
         });
+    }
+
+    // Add AI-powered categorization for each service
+    const apiKey = process.env.GOOGLE_AI_API_KEY;
+    if (apiKey) {
+      try {
+        // Analyze services with AI (limit to services with reviews for better analysis)
+        const servicesWithReviews = servicesWithStats.filter((s: any) => s.reviewCount > 0);
+        
+        const categorizations = await Promise.all(
+          servicesWithReviews.map(async (service: any) => {
+            try {
+              const analysis = await analyzeProviderWithLLM(
+                service.title,
+                service.avgRating,
+                service.reviewCount,
+                service.reviews
+              );
+              return { serviceId: service.id, category: analysis.category };
+            } catch (error) {
+              console.error(`Failed to categorize service ${service.id}:`, error);
+              // Fallback categorization
+              if (service.avgRating >= 4) return { serviceId: service.id, category: "Trusted Professional" };
+              if (service.avgRating >= 2.5) return { serviceId: service.id, category: "Needs Review" };
+              return { serviceId: service.id, category: "Low Reliability" };
+            }
+          })
+        );
+
+        // Add categories to services
+        const categoryMap = new Map(categorizations.map(c => [c.serviceId, c.category]));
+        servicesWithStats = servicesWithStats.map((service: any) => ({
+          ...service,
+          category: categoryMap.get(service.id) || (
+            service.reviewCount === 0 ? "Needs Review" : 
+            service.avgRating >= 4 ? "Trusted Professional" :
+            service.avgRating >= 2.5 ? "Needs Review" :
+            "Low Reliability"
+          )
+        }));
+      } catch (error) {
+        console.error("Error during AI categorization:", error);
+        // Fallback to rule-based categorization for all services
+        servicesWithStats = servicesWithStats.map((service: any) => ({
+          ...service,
+          category: service.reviewCount === 0 ? "Needs Review" :
+                   service.avgRating >= 4 ? "Trusted Professional" :
+                   service.avgRating >= 2.5 ? "Needs Review" :
+                   "Low Reliability"
+        }));
+      }
+    } else {
+      // No API key, use rule-based categorization
+      servicesWithStats = servicesWithStats.map((service: any) => ({
+        ...service,
+        category: service.reviewCount === 0 ? "Needs Review" :
+                 service.avgRating >= 4 ? "Trusted Professional" :
+                 service.avgRating >= 2.5 ? "Needs Review" :
+                 "Low Reliability"
+      }));
     }
 
     // Apply pagination
