@@ -12,6 +12,7 @@ import ratingsRoutes from "./routes/ratings";
 import moderationRoutes from "./routes/moderation";
 import reportsRoutes from "./routes/reports";
 import adminRoutes from "./routes/admin";
+import dashboardRoutes from "./routes/dashboard";
 import { generalLimiter } from "./middleware/rateLimiter";
 
 dotenv.config();
@@ -45,6 +46,7 @@ app.use("/api/ratings", ratingsRoutes);
 app.use("/api/moderation", moderationRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 app.get("/", (req, res) => {
   res.json({

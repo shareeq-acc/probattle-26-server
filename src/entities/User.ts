@@ -48,7 +48,7 @@ export class User {
   @Column({ nullable: true, type: 'varchar' })
   avatar: string | null;
 
-  @Column({ default: false })
+  @Column({ default: true })
   verified: boolean;
 
   @CreateDateColumn()

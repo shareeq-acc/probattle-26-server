@@ -16,8 +16,8 @@ const ratingRepository = AppDataSource.getRepository(Rating);
 const bookingRepository = AppDataSource.getRepository(Booking);
 const userRepository = AppDataSource.getRepository(User);
 
-// Rate limiting for rating endpoints
-const ratingLimiter = createRateLimiter(15 * 60 * 1000, 20); // 20 rating operations per 15 minutes
+// Rate limiting for rating endpoints (increased limit)
+const ratingLimiter = createRateLimiter(15 * 60 * 1000, 100); // 100 rating operations per 15 minutes (increased from 20)
 
 // POST /api/ratings
 router.post("/", ratingLimiter, authMiddleware, async (req: AuthRequest, res: Response) => {
