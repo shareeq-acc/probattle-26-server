@@ -1,15 +1,24 @@
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { AppDataSource } from "../data-source";
 import { Message } from "../entities/Message";
 import { User } from "../entities/User";
 import { authenticateToken } from "../middleware/auth";
 import WebSocketService from "../services/WebSocketService";
 import RedisService from "../services/RedisService";
+import MessageQueueService from "../services/MessageQueueService";
 
 const router = Router();
 
+interface AuthRequest extends Request {
+  user?: {
+    id: string;
+    email: string;
+    role: string;
+  };
+}
+
 // Send a message (REST API alternative to WebSocket)
-router.post("/send", authenticateToken, async (req, res) => {
+router.post("/send", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const senderId = req.user!.id; // Use id instead of userId
     const { receiverId, message, serviceId } = req.body;
@@ -75,7 +84,7 @@ router.post("/send", authenticateToken, async (req, res) => {
 });
 
 // Get conversation between two users
-router.get("/conversation/:otherUserId", authenticateToken, async (req, res) => {
+router.get("/conversation/:otherUserId", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id; // Use id instead of userId
     const otherUserId = req.params.otherUserId; // Keep as string for UUID
@@ -124,7 +133,7 @@ router.get("/conversation/:otherUserId", authenticateToken, async (req, res) => 
 });
 
 // Get all conversations for a user
-router.get("/conversations", authenticateToken, async (req, res) => {
+router.get("/conversations", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id; // Use id instead of userId
 
@@ -192,7 +201,7 @@ router.get("/conversations", authenticateToken, async (req, res) => {
 });
 
 // Mark messages as read
-router.post("/read/:messageId", authenticateToken, async (req, res) => {
+router.post("/read/:messageId", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id; // Use id instead of userId
     const messageId = parseInt(req.params.messageId);
@@ -230,7 +239,7 @@ router.post("/read/:messageId", authenticateToken, async (req, res) => {
 });
 
 // Get unread message count
-router.get("/unread-count", authenticateToken, async (req, res) => {
+router.get("/unread-count", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id; // Use id instead of userId
 
@@ -258,7 +267,7 @@ router.get("/unread-count", authenticateToken, async (req, res) => {
 });
 
 // Mark all messages in a conversation as read
-router.post("/read-conversation/:otherUserId", authenticateToken, async (req, res) => {
+router.post("/read-conversation/:otherUserId", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id; // Use id instead of userId
     const otherUserId = req.params.otherUserId; // Keep as string for UUID
@@ -293,7 +302,7 @@ router.post("/read-conversation/:otherUserId", authenticateToken, async (req, re
 });
 
 // Delete a message
-router.delete("/:messageId", authenticateToken, async (req, res) => {
+router.delete("/:messageId", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id; // Use id instead of userId
     const messageId = parseInt(req.params.messageId);
@@ -331,7 +340,7 @@ router.delete("/:messageId", authenticateToken, async (req, res) => {
 });
 
 // Search messages
-router.get("/search", authenticateToken, async (req, res) => {
+router.get("/search", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id; // Use id instead of userId
     const query = req.query.q as string;
