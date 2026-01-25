@@ -13,6 +13,122 @@ const serviceRepository = AppDataSource.getRepository(Service);
 const bookingRepository = AppDataSource.getRepository(Booking);
 const ratingRepository = AppDataSource.getRepository(Rating);
 
+// LLM Helper Function for Provider Analysis
+interface ProviderAnalysis {
+  category: "Trusted Professional" | "Needs Review" | "Low Reliability";
+  reasoning: string;
+  confidence: number;
+}
+
+async function analyzeProviderWithLLM(
+  providerName: string,
+  avgRating: number,
+  totalReviews: number,
+  reviews: Array<{ score: number; review: string | null }>
+): Promise<ProviderAnalysis> {
+  const apiKey = process.env.GOOGLE_AI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("GOOGLE_AI_API_KEY not configured in environment variables");
+  }
+
+  // Construct the prompt for Google AI
+  const reviewTexts = reviews
+    .filter(r => r.review && r.review.trim())
+    .map(r => `Rating: ${r.score}/5 - Review: "${r.review}"`)
+    .join("\n");
+
+  const prompt = `You are an expert at analyzing service provider reviews. Analyze the following provider and categorize them into exactly one of these three categories:
+
+1. "Trusted Professional" - Consistently high ratings (4+), positive reviews, reliable service
+2. "Needs Review" - Mixed ratings (2.5-4), combination of positive and negative feedback, inconsistent performance
+3. "Low Reliability" - Low ratings (below 2.5), predominantly negative reviews, poor service quality
+
+Provider: ${providerName}
+Average Rating: ${avgRating.toFixed(1)}/5
+Total Reviews: ${totalReviews}
+
+Reviews:
+${reviewTexts || "No written reviews available, only ratings."}
+
+Respond in JSON format only:
+{
+  "category": "<one of the three categories>",
+  "reasoning": "<brief explanation in 1-2 sentences>",
+  "confidence": <number between 0 and 1>
+}`;
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: prompt
+            }]
+          }]
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Google AI API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json() as any;
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!text) {
+      throw new Error("No response from Google AI");
+    }
+
+    // Extract JSON from response (handle markdown code blocks if present)
+    let jsonText = text.trim();
+    if (jsonText.startsWith("```json")) {
+      jsonText = jsonText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    } else if (jsonText.startsWith("```")) {
+      jsonText = jsonText.replace(/```\n?/g, "").trim();
+    }
+
+    const analysis: ProviderAnalysis = JSON.parse(jsonText);
+
+    // Validate the response
+    const validCategories = ["Trusted Professional", "Needs Review", "Low Reliability"];
+    if (!validCategories.includes(analysis.category)) {
+      throw new Error("Invalid category from LLM");
+    }
+
+    return analysis;
+  } catch (error) {
+    console.error("Error calling Google AI:", error);
+    // Fallback to rule-based categorization
+    if (avgRating >= 4) {
+      return {
+        category: "Trusted Professional",
+        reasoning: "High average rating (fallback analysis)",
+        confidence: 0.6
+      };
+    } else if (avgRating >= 2.5) {
+      return {
+        category: "Needs Review",
+        reasoning: "Mixed ratings (fallback analysis)",
+        confidence: 0.6
+      };
+    } else {
+      return {
+        category: "Low Reliability",
+        reasoning: "Low average rating (fallback analysis)",
+        confidence: 0.6
+      };
+    }
+  }
+}
+
 // GET /api/admin/users (Admin only)
 router.get("/users", authenticateToken, requireAdmin, generalLimiter, async (req: AuthRequest, res: Response) => {
   try {
@@ -23,11 +139,11 @@ router.get("/users", authenticateToken, requireAdmin, generalLimiter, async (req
     const offset = (pageNum - 1) * limitNum;
 
     let where: any = {};
-    
+
     if (role && Object.values(UserRole).includes(role as UserRole)) {
       where.role = role;
     }
-    
+
     if (verified !== undefined) {
       where.verified = verified === 'true';
     }
@@ -266,15 +382,15 @@ router.get("/services", authenticateToken, requireAdmin, generalLimiter, async (
 
     // Group ratings by service
     const serviceMap = new Map();
-    
+
     ratingsWithServices.forEach(rating => {
       const service = rating.booking.service;
       const serviceId = service.id;
-      
+
       if (!serviceMap.has(serviceId)) {
         // Remove password from provider
         const { password: _, ...providerWithoutPassword } = service.provider;
-        
+
         serviceMap.set(serviceId, {
           ...service,
           provider: providerWithoutPassword,
@@ -283,9 +399,9 @@ router.get("/services", authenticateToken, requireAdmin, generalLimiter, async (
           reviewCount: 0
         });
       }
-      
+
       const serviceData = serviceMap.get(serviceId);
-      
+
       // Add this rating to the service
       serviceData.ratings.push({
         id: rating.id,
@@ -298,7 +414,7 @@ router.get("/services", authenticateToken, requireAdmin, generalLimiter, async (
           avatar: rating.seeker.avatar
         }
       });
-      
+
       serviceData.totalScore += rating.score;
       serviceData.reviewCount += 1;
     });
@@ -307,7 +423,7 @@ router.get("/services", authenticateToken, requireAdmin, generalLimiter, async (
     let servicesWithStats = Array.from(serviceMap.values()).map((service: any) => {
       // Remove the intermediate ratings array and totalScore, keep only the clean data
       const { ratings, totalScore, ...cleanService } = service;
-      
+
       return {
         ...cleanService,
         avgRating: service.reviewCount > 0 ? Math.round((service.totalScore / service.reviewCount) * 10) / 10 : 0,
@@ -319,7 +435,7 @@ router.get("/services", authenticateToken, requireAdmin, generalLimiter, async (
     // Also get services without ratings to include in the list
     const servicesWithRatings = Array.from(serviceMap.keys());
     let servicesWithoutRatings = [];
-    
+
     if (servicesWithRatings.length > 0) {
       servicesWithoutRatings = await serviceRepository
         .createQueryBuilder("service")
@@ -337,7 +453,7 @@ router.get("/services", authenticateToken, requireAdmin, generalLimiter, async (
     servicesWithoutRatings.forEach(service => {
       // Remove password from provider
       const { password: _, ...providerWithoutPassword } = service.provider;
-      
+
       servicesWithStats.push({
         ...service,
         provider: providerWithoutPassword,
@@ -356,50 +472,50 @@ router.get("/services", authenticateToken, requireAdmin, generalLimiter, async (
           if (a.reviewCount === 0 && b.reviewCount === 0) return 0;
           if (a.reviewCount === 0) return 1;
           if (b.reviewCount === 0) return -1;
-          
+
           // Sort by average rating (ascending - lowest first)
           if (a.avgRating !== b.avgRating) {
             return a.avgRating - b.avgRating;
           }
-          
+
           // If ratings are equal, sort by review count (ascending)
           return a.reviewCount - b.reviewCount;
         });
         break;
-      
+
       case 'highest_rating':
         servicesWithStats.sort((a: any, b: any) => {
           // Services with no ratings go to the end
           if (a.reviewCount === 0 && b.reviewCount === 0) return 0;
           if (a.reviewCount === 0) return 1;
           if (b.reviewCount === 0) return -1;
-          
+
           // Sort by average rating (descending - highest first)
           if (b.avgRating !== a.avgRating) {
             return b.avgRating - a.avgRating;
           }
-          
+
           // If ratings are equal, sort by review count (descending)
           return b.reviewCount - a.reviewCount;
         });
         break;
-      
+
       case 'most_views':
         servicesWithStats.sort((a: any, b: any) => b.views - a.views);
         break;
-      
+
       case 'least_views':
         servicesWithStats.sort((a: any, b: any) => a.views - b.views);
         break;
-      
+
       case 'newest':
         servicesWithStats.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         break;
-      
+
       case 'oldest':
         servicesWithStats.sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         break;
-      
+
       default:
         // Default to lowest rating
         servicesWithStats.sort((a: any, b: any) => {
@@ -513,6 +629,138 @@ router.patch("/services/:id/enable", authenticateToken, requireAdmin, async (req
         isActive: service.isActive,
         provider: service.provider
       }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// GET /api/admin/providers/categorize (Admin only) - Categorize providers using LLM
+router.get("/providers/categorize", authenticateToken, requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    // Check if API key is configured
+    if (!process.env.GOOGLE_AI_API_KEY) {
+      return res.status(503).json({
+        error: "LLM service not configured",
+        message: "GOOGLE_AI_API_KEY environment variable is not set. Please add it to your .env file."
+      });
+    }
+
+    // Get all users who are providers (have services)
+    const providers = await userRepository
+      .createQueryBuilder("user")
+      .leftJoinAndSelect("user.services", "service")
+      .where("user.role = :role", { role: UserRole.PROVIDER })
+      .getMany();
+
+    // Get all ratings with related data
+    const allRatings = await ratingRepository
+      .createQueryBuilder("rating")
+      .leftJoinAndSelect("rating.booking", "booking")
+      .leftJoinAndSelect("booking.service", "service")
+      .leftJoinAndSelect("service.provider", "provider")
+      .getMany();
+
+    // Aggregate ratings by provider
+    const providerRatingsMap = new Map<string, Array<{ score: number; review: string | null }>>();
+
+    allRatings.forEach(rating => {
+      if (rating.booking?.service?.provider) {
+        const providerId = rating.booking.service.provider.id;
+        if (!providerRatingsMap.has(providerId)) {
+          providerRatingsMap.set(providerId, []);
+        }
+        providerRatingsMap.get(providerId)!.push({
+          score: rating.score,
+          review: rating.review
+        });
+      }
+    });
+
+    // Analyze each provider with LLM
+    const categorizedProviders: {
+      trustedProfessionals: any[];
+      needsReview: any[];
+      lowReliability: any[];
+    } = {
+      trustedProfessionals: [],
+      needsReview: [],
+      lowReliability: []
+    };
+
+    const analysisPromises = providers.map(async (provider) => {
+      const ratings = providerRatingsMap.get(provider.id) || [];
+      const totalReviews = ratings.length;
+      const avgRating = totalReviews > 0
+        ? ratings.reduce((sum, r) => sum + r.score, 0) / totalReviews
+        : 0;
+
+      // Skip providers with no reviews
+      if (totalReviews === 0) {
+        return null;
+      }
+
+      try {
+        const analysis = await analyzeProviderWithLLM(
+          provider.name,
+          avgRating,
+          totalReviews,
+          ratings
+        );
+
+        // Remove password from provider
+        const { password: _, ...providerWithoutPassword } = provider;
+
+        const providerData = {
+          ...providerWithoutPassword,
+          stats: {
+            avgRating: Math.round(avgRating * 10) / 10,
+            totalReviews,
+            totalServices: provider.services?.length || 0
+          },
+          analysis: {
+            category: analysis.category,
+            reasoning: analysis.reasoning,
+            confidence: analysis.confidence
+          }
+        };
+
+        return { category: analysis.category, data: providerData };
+      } catch (error) {
+        console.error(`Error analyzing provider ${provider.id}:`, error);
+        return null;
+      }
+    });
+
+    const results = await Promise.all(analysisPromises);
+
+    // Group providers by category
+    results.forEach(result => {
+      if (!result) return;
+
+      switch (result.category) {
+        case "Trusted Professional":
+          categorizedProviders.trustedProfessionals.push(result.data);
+          break;
+        case "Needs Review":
+          categorizedProviders.needsReview.push(result.data);
+          break;
+        case "Low Reliability":
+          categorizedProviders.lowReliability.push(result.data);
+          break;
+      }
+    });
+
+    res.json({
+      summary: {
+        total: providers.length,
+        analyzed: results.filter(r => r !== null).length,
+        trustedProfessionals: categorizedProviders.trustedProfessionals.length,
+        needsReview: categorizedProviders.needsReview.length,
+        lowReliability: categorizedProviders.lowReliability.length
+      },
+      categories: categorizedProviders
     });
   } catch (error) {
     console.error(error);
