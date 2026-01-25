@@ -82,7 +82,7 @@ class MessageQueueService {
   /**
    * Send a chat message
    */
-  async sendChatMessage(senderId: number, receiverId: number, message: string): Promise<void> {
+  async sendChatMessage(senderId: string, receiverId: string, message: string): Promise<void> {
     await this.publishToChannel(this.CHANNEL_MESSAGES, {
       type: 'chat_message',
       data: { senderId, receiverId, message },
@@ -93,7 +93,7 @@ class MessageQueueService {
   /**
    * Send a notification
    */
-  async sendNotification(userId: number, title: string, body: string, data?: any): Promise<void> {
+  async sendNotification(userId: string, title: string, body: string, data?: any): Promise<void> {
     await this.publishToChannel(this.CHANNEL_NOTIFICATIONS, {
       type: 'push_notification',
       data: { userId, title, body, data },
@@ -111,7 +111,7 @@ class MessageQueueService {
   /**
    * Store message in Redis list for offline users (backup)
    */
-  async storeOfflineMessage(userId: number, message: any): Promise<void> {
+  async storeOfflineMessage(userId: string, message: any): Promise<void> {
     try {
       const key = `offline_messages:${userId}`;
       await RedisService.lpush(key, JSON.stringify(message));
@@ -125,7 +125,7 @@ class MessageQueueService {
   /**
    * Get offline messages for a user
    */
-  async getOfflineMessages(userId: number): Promise<any[]> {
+  async getOfflineMessages(userId: string): Promise<any[]> {
     try {
       const key = `offline_messages:${userId}`;
       const messages: any[] = [];
