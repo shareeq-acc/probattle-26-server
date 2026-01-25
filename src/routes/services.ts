@@ -9,6 +9,7 @@ import { generalLimiter, uploadLimiter } from "../middleware/rateLimiter";
 import { calculateH3Index, getH3CellsInRadius, calculateDistance } from "../utils/spatial";
 import { reverseGeocode } from "../utils/geocoding";
 import { Like, In } from "typeorm";
+import { cacheMiddleware, CacheManager, invalidateCache } from "../middleware/cache";
 
 const router = Router();
 const serviceRepository = AppDataSource.getRepository(Service);
@@ -63,8 +64,8 @@ router.get("/my-services", authenticateToken, generalLimiter, async (req: AuthRe
   }
 });
 
-// GET /api/services (ENHANCED with geospatial search and sorting)
-router.get("/", generalLimiter, async (req: Request, res: Response) => {
+// GET /api/services (ENHANCED with geospatial search, sorting, and caching)
+router.get("/", generalLimiter, cacheMiddleware({ ttl: 300, keyPrefix: 'services' }), async (req: Request, res: Response) => {
   try {
     const { 
       lat, lng, radius, city, category, search, 
@@ -318,6 +319,10 @@ router.post("/", authenticateToken, requireProvider, uploadLimiter, uploadServic
 
     await serviceRepository.save(service);
 
+    // Invalidate caches
+    await CacheManager.invalidateAllServices();
+    await invalidateCache('services:*');
+
     const savedService = await serviceRepository.findOne({
       where: { id: service.id },
       relations: ["provider"]
@@ -398,6 +403,11 @@ router.put("/:id", authenticateToken, uploadLimiter, uploadServiceImages, async 
 
     await serviceRepository.save(service);
 
+    // Invalidate caches
+    await CacheManager.invalidateService(parseInt(id));
+    await CacheManager.invalidateAllServices();
+    await invalidateCache('services:*');
+
     const updatedService = await serviceRepository.findOne({
       where: { id },
       relations: ["provider"]
@@ -455,21 +465,32 @@ router.delete("/:id/images", authenticateToken, async (req: AuthRequest, res: Re
   }
 });
 
-// GET /api/services/:id
+// GET /api/services/:id (with caching)
 router.get("/:id", async (req: Request, res: Response) => {
   try {
-    const service = await serviceRepository.findOne({
-      where: { id: req.params.id },
-      relations: ["provider"]
-    });
+    const serviceId = parseInt(req.params.id);
+
+    // Check cache first
+    let service = await CacheManager.getCachedService(serviceId);
 
     if (!service) {
-      return res.status(404).json({ error: "Service not found" });
+      service = await serviceRepository.findOne({
+        where: { id: req.params.id },
+        relations: ["provider"]
+      });
+
+      if (!service) {
+        return res.status(404).json({ error: "Service not found" });
+      }
+
+      // Cache the service
+      await CacheManager.cacheService(serviceId, service);
     }
 
-    // Increment view count
-    service.views = (service.views || 0) + 1;
-    await serviceRepository.save(service);
+    // Increment view count (async, don't wait)
+    serviceRepository.increment({ id: req.params.id }, 'views', 1).catch(err => 
+      console.error('Error incrementing views:', err)
+    );
 
     if (service.provider) {
       const { password: _, ...providerWithoutPassword } = service.provider;

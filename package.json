@@ -1,14 +1,17 @@
 {
   "name": "neighbourly-backend",
-  "version": "1.0.0",
-  "description": "Neighbourhood marketplace backend API",
+  "version": "2.0.0",
+  "description": "Neighbourhood marketplace backend API - Scaled for nationwide deployment",
   "main": "dist/server.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "seed": "ts-node src/seed.ts",
-    "migrate-services": "ts-node src/utils/migrateServices.ts"
+    "migrate-services": "ts-node src/utils/migrateServices.ts",
+    "docker:build": "docker build -t neighbourly-backend .",
+    "docker:run": "docker-compose up",
+    "docker:down": "docker-compose down"
   },
   "keywords": [],
   "author": "",
@@ -22,12 +25,15 @@
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
+    "firebase-admin": "^12.0.0",
     "h3-js": "^4.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
     "multer-storage-cloudinary": "^4.0.0",
     "pg": "^8.11.3",
-    "typeorm": "^0.3.17"
+    "typeorm": "^0.3.17",
+    "socket.io": "^4.7.2",
+    "ioredis": "^5.3.2"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.2",

@@ -15,6 +15,35 @@ const bookingRepository = AppDataSource.getRepository(Booking);
 const serviceRepository = AppDataSource.getRepository(Service);
 const ratingRepository = AppDataSource.getRepository(Rating);
 
+// GET /api/users/:id - Get user details by ID (for messaging)
+router.get("/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.params.id; // Keep as string for UUID
+    
+    const user = await userRepository.findOne({ 
+      where: { id: userId },
+      select: ['id', 'name', 'email', 'avatar', 'role', 'bio']
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Return user with profilePicture alias for avatar
+    res.json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      profilePicture: user.avatar,
+      role: user.role,
+      bio: user.bio
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // GET /api/users/me
 router.get("/me", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
